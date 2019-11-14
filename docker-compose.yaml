@@ -1,0 +1,91 @@
+version: '3'
+
+services:
+  data:
+    image: busybox:latest
+    volumes:
+      - /var/local/sentry/data:/data
+      - /var/local/sentry/data/var/lib/postgresql/data:/var/lib/postgresql/data
+    entrypoint: /bin/echo
+
+  sentry-redis:
+    image: redis
+    container_name: sentry-redis
+    volumes:
+      - "./data/redis:/data"
+    restart: always
+
+  sentry-postgres:
+    image: postgres
+    container_name: sentry-postgres
+    environment:
+      POSTGRES_USER : sentry
+      POSTGRES_PASSWORD : secret
+    volumes:
+      - "./data/postgres/etc:/etc/postgresql"
+      - "./data/postgres/log:/var/log/postgresql"
+      - "./data/postgres/lib/data:/var/lib/postgresql/data"
+
+  sentry:
+    image: sentry
+    container_name: sentry
+    env_file:
+      - env/sentry
+    environment:
+      SENTRY_REDIS_HOST: redis
+      SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_USER : sentry
+      SENTRY_DB_PASSWORD: secret
+    depends_on:
+      - sentry-redis
+      - sentry-postgres
+    links:
+      - sentry-redis:redis
+      - sentry-postgres:postgres
+    restart: always
+    networks:
+      - default
+    ports:
+      - "9000:9000"
+
+  sentry-cron:
+    image: sentry
+    container_name: sentry-cron
+    command: sentry run cron
+    env_file:
+      - env/sentry
+    environment:
+      SENTRY_REDIS_HOST: redis
+      SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_USER : sentry
+      SENTRY_DB_PASSWORD: secret
+    depends_on:
+      - sentry-postgres
+      - sentry-redis
+    links:
+      - sentry-redis:redis
+      - sentry-postgres:postgres
+    restart: always
+    networks:
+      - default
+
+  sentry-worker-1:
+    image: sentry
+    container_name: sentry-worker-1
+    command: sentry run worker
+    env_file:
+      - env/sentry
+    environment:
+      SENTRY_REDIS_HOST: redis
+      SENTRY_POSTGRES_HOST: postgres
+      SENTRY_DB_USER : sentry
+      SENTRY_DB_PASSWORD: secret
+    depends_on:
+      - sentry-postgres
+      - sentry-redis
+    links:
+      - sentry-redis:redis
+      - sentry-postgres:postgres
+    restart: always
+    networks:
+      - default
